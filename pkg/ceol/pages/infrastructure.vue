@@ -205,7 +205,20 @@ export default defineComponent({
     },
 
     isStateful(resource: { kind: string; metadata: { name: string } }) {
-      return resource.kind === 'Deployment' && resource.metadata.name === 'gitea';
+      if (resource.kind === 'Deployment' && resource.metadata.name === 'gitea') {
+        return true;
+      }
+
+      // Preserve bootstrap-generated resources that are only created by the Gitea init script
+      if (resource.kind === 'ConfigMap' && resource.metadata.name === 'ceol-gitea-token') {
+        return true;
+      }
+
+      if (resource.kind === 'Secret' && (resource.metadata.name === 'ceol-registry-auth' || resource.metadata.name === 'ceol-registry-pull')) {
+        return true;
+      }
+
+      return false;
     },
 
     async deleteExistingResources() {

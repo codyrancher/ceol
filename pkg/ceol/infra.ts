@@ -3,6 +3,7 @@
 
 export const CEOL_PROJECT_NAME = 'ceol';
 export const CEOL_NAMESPACE = 'ceol-system';
+export const GITEA_NODE_PORT = 30300;
 
 export interface InfraResource {
   apiVersion: string;
@@ -23,6 +24,7 @@ const KIND_TO_PLURAL: Record<string, string> = {
   ServiceAccount:     'serviceaccounts',
   Role:               'roles',
   RoleBinding:        'rolebindings',
+  Job:                'jobs',
 };
 
 /**
@@ -50,8 +52,10 @@ export function resourcePath(resource: InfraResource): string {
 
 // All resource kinds we manage (used for cleanup). Order matters for deletion (delete workloads first).
 export const MANAGED_KINDS: InfraResource[] = [
+  { apiVersion: 'batch/v1', kind: 'Job', metadata: { name: '', namespace: CEOL_NAMESPACE } },
   { apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: '', namespace: CEOL_NAMESPACE } },
   { apiVersion: 'v1', kind: 'Service', metadata: { name: '', namespace: CEOL_NAMESPACE } },
+  { apiVersion: 'v1', kind: 'Secret', metadata: { name: '', namespace: CEOL_NAMESPACE } },
   { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: '', namespace: CEOL_NAMESPACE } },
   { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'RoleBinding', metadata: { name: '', namespace: CEOL_NAMESPACE } },
   { apiVersion: 'rbac.authorization.k8s.io/v1', kind: 'Role', metadata: { name: '', namespace: CEOL_NAMESPACE } },
@@ -69,7 +73,7 @@ server {
     client_max_body_size 512m;
     location / {
         proxy_pass http://gitea.${ CEOL_NAMESPACE }.svc:3000;
-        proxy_set_header Host gitea.${ CEOL_NAMESPACE }.svc:3000;
+        proxy_set_header Host localhost:${ GITEA_NODE_PORT };
         proxy_set_header Authorization "Basic $AUTH";
         proxy_set_header X-Real-IP \\$remote_addr;
         proxy_buffering off;
@@ -242,7 +246,7 @@ export const infraResources: InfraResource[] = [
                 { containerPort: 22, name: 'ssh' },
               ],
               env: [
-                { name: 'GITEA__server__ROOT_URL', value: `http://gitea.${ CEOL_NAMESPACE }.svc:3000` },
+                { name: 'GITEA__server__ROOT_URL', value: `http://localhost:${ GITEA_NODE_PORT }` },
                 { name: 'GITEA__server__SSH_DOMAIN', value: `gitea.${ CEOL_NAMESPACE }.svc` },
                 { name: 'GITEA__service__DISABLE_REGISTRATION', value: 'false' },
                 { name: 'GITEA__packages__ENABLED', value: 'true' },
@@ -268,9 +272,10 @@ export const infraResources: InfraResource[] = [
       namespace: CEOL_NAMESPACE,
     },
     spec: {
+      type:     'NodePort',
       selector: { app: 'gitea' },
       ports:    [
-        { name: 'http', port: 3000, targetPort: 3000 },
+        { name: 'http', port: 3000, targetPort: 3000, nodePort: 30300 },
         { name: 'ssh', port: 22, targetPort: 22 },
       ],
     },
@@ -324,5 +329,69 @@ export const infraResources: InfraResource[] = [
         { name: 'http', port: 3000, targetPort: 3000 },
       ],
     },
+  },
+  // Builder ServiceAccount — used by Kaniko build jobs and promote jobs
+  {
+    apiVersion: 'v1',
+    kind:       'ServiceAccount',
+    metadata:   {
+      name:      'ceol-builder',
+      namespace: CEOL_NAMESPACE,
+    },
+  },
+  {
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind:       'Role',
+    metadata:   {
+      name:      'ceol-builder',
+      namespace: CEOL_NAMESPACE,
+    },
+    rules: [
+      {
+        apiGroups: [''],
+        resources: ['configmaps'],
+        verbs:     ['get', 'create', 'update', 'patch'],
+      },
+      {
+        apiGroups: [''],
+        resources: ['pods', 'pods/log'],
+        verbs:     ['get', 'list'],
+      },
+      {
+        apiGroups: ['batch'],
+        resources: ['jobs'],
+        verbs:     ['get', 'list', 'create', 'delete'],
+      },
+      {
+        apiGroups: ['apps'],
+        resources: ['deployments'],
+        verbs:     ['get', 'create', 'update', 'put'],
+      },
+      {
+        apiGroups: [''],
+        resources: ['services'],
+        verbs:     ['get', 'create'],
+      },
+    ],
+  },
+  {
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind:       'RoleBinding',
+    metadata:   {
+      name:      'ceol-builder',
+      namespace: CEOL_NAMESPACE,
+    },
+    roleRef: {
+      apiGroup: 'rbac.authorization.k8s.io',
+      kind:     'Role',
+      name:     'ceol-builder',
+    },
+    subjects: [
+      {
+        kind:      'ServiceAccount',
+        name:      'ceol-builder',
+        namespace: CEOL_NAMESPACE,
+      },
+    ],
   },
 ];

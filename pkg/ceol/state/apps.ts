@@ -1,6 +1,7 @@
 import { getTemplate } from '../app-templates';
 import { listRepos, deleteRepo, ensureGiteaAdmin } from '../app-templates/gitea';
 import type { GiteaRepo } from '../app-templates/gitea';
+import { saveAppMeta } from './builds';
 
 export interface App {
   id: string;
@@ -45,6 +46,9 @@ export async function createApp(store: any, name: string, templateId: string): P
   await template.init(store, name);
 
   const safeName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+  // Persist template ID so deploy can provision template-specific infra
+  await saveAppMeta(store, safeName, templateId);
 
   return {
     id:          safeName,

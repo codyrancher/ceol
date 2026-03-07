@@ -40,4 +40,11 @@ export default function(plugin: IPlugin): void {
     component: () => import('./pages/app-detail.vue'),
     meta:      { product: 'ceol' },
   });
+
+  plugin.addRoute('blank', {
+    name: 'ceol-app-preview',
+    path: '/c/:cluster/ceol/app/:app/preview/:env',
+    component: () => import('./pages/app-preview.vue'),
+    meta: { product: 'ceol' },
+  });
 }

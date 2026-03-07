@@ -2,19 +2,29 @@
 import { defineComponent } from 'vue';
 import CeolTabs from '../components/CeolTabs.vue';
 import AppCard from '../components/AppCard.vue';
+import CreateAppModal from '../components/CreateAppModal.vue';
 import { fetchApps, createApp } from '../state/apps';
 import type { App } from '../state/apps';
 
 export default defineComponent({
-  components: { CeolTabs, AppCard },
+  components: {
+    CeolTabs, AppCard, CreateAppModal,
+  },
 
   data() {
     return {
-      apps:       [] as App[],
-      loading:    true,
-      creating:   false,
-      statusText: '',
+      apps:        [] as App[],
+      loading:     true,
+      creating:    false,
+      statusText:  '',
+      showModal:   false,
     };
+  },
+
+  computed: {
+    existingNames(): string[] {
+      return this.apps.map((a) => a.name);
+    },
   },
 
   mounted() {
@@ -37,18 +47,13 @@ export default defineComponent({
       }
     },
 
-    async onCreateApp() {
-      const name = prompt('App name:');
-
-      if (!name?.trim()) {
-        return;
-      }
-
+    async onCreateApp({ name, templateId }: { name: string; templateId: string }) {
+      this.showModal = false;
       this.creating = true;
       this.statusText = 'Creating app...';
 
       try {
-        await createApp(this.$store, name.trim(), 'vue3');
+        await createApp(this.$store, name, templateId);
         await this.loadApps();
       } catch (err: any) {
         const msg = err?.data || err?.message || err?.statusText || JSON.stringify(err);
@@ -77,7 +82,7 @@ export default defineComponent({
         <button
           class="btn role-primary btn-sm"
           :disabled="creating"
-          @click="onCreateApp"
+          @click="showModal = true"
         >
           <i
             v-if="creating"
@@ -122,6 +127,13 @@ export default defineComponent({
         />
       </div>
     </div>
+
+    <CreateAppModal
+      v-if="showModal"
+      :existing-names="existingNames"
+      @close="showModal = false"
+      @create="onCreateApp"
+    />
   </div>
 </template>
 
