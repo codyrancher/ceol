@@ -41,6 +41,12 @@ export default defineComponent({
         </router-link>
       </li>
     </ul>
+    <div
+      v-if="$slots.actions"
+      class="ceol-tabs__actions"
+    >
+      <slot name="actions" />
+    </div>
   </div>
 </template>
 
@@ -54,12 +60,22 @@ export default defineComponent({
 
 <style lang="scss" scoped>
 .ceol-tabs {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+
   ul {
     display: flex;
     list-style: none;
     padding: 0 20px;
     margin: 0;
-    border-bottom: 1px solid var(--border);
+    flex: 1;
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
   }
 
   li {

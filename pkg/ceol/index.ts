@@ -33,4 +33,11 @@ export default function(plugin: IPlugin): void {
     component: () => import('./pages/infrastructure.vue'),
     meta:      { product: 'ceol' },
   });
+
+  plugin.addRoute('plain', {
+    name:      'ceol-app-detail',
+    path:      '/c/:cluster/ceol/app/:app',
+    component: () => import('./pages/app-detail.vue'),
+    meta:      { product: 'ceol' },
+  });
 }

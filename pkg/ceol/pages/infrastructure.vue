@@ -11,6 +11,44 @@ import CeolTabs from '../components/CeolTabs.vue';
 const CLUSTER_ID = 'local';
 const K8S_BASE = `/k8s/clusters/${ CLUSTER_ID }`;
 
+const KIND_TO_RANCHER_TYPE: Record<string, string> = {
+  ConfigMap:      'configmap',
+  Deployment:     'apps.deployment',
+  Service:        'service',
+  ServiceAccount: 'serviceaccount',
+  Role:           'rbac.authorization.k8s.io.role',
+  RoleBinding:    'rbac.authorization.k8s.io.rolebinding',
+};
+
+interface ResourceStatus {
+  kind: string;
+  name: string;
+  state: string;
+  stateClass: string;
+  link: string;
+}
+
+function deriveState(resource: InfraResource, live: any): { state: string; stateClass: string } {
+  if (!live) {
+    return { state: 'Not Found', stateClass: 'text-muted' };
+  }
+
+  switch (resource.kind) {
+  case 'Deployment': {
+    const ready = live.status?.readyReplicas || 0;
+    const desired = live.spec?.replicas || 1;
+
+    if (ready >= desired) {
+      return { state: `Ready (${ ready }/${ desired })`, stateClass: 'text-success' };
+    }
+
+    return { state: `Progressing (${ ready }/${ desired })`, stateClass: 'text-warning' };
+  }
+  default:
+    return { state: 'Active', stateClass: 'text-success' };
+  }
+}
+
 export default defineComponent({
   components: { CeolTabs },
 
@@ -19,7 +57,20 @@ export default defineComponent({
       busy:             false,
       statusText:       '',
       deleteStorageToo: false,
+      resources:        [] as ResourceStatus[],
+      pollTimer:        null as ReturnType<typeof setInterval> | null,
     };
+  },
+
+  mounted() {
+    this.refreshResources();
+    this.pollTimer = setInterval(() => this.refreshResources(), 5000);
+  },
+
+  beforeUnmount() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+    }
   },
 
   methods: {
@@ -36,6 +87,36 @@ export default defineComponent({
       }
 
       return await this.$store.dispatch('management/request', { opt });
+    },
+
+    async refreshResources() {
+      const results: ResourceStatus[] = [];
+
+      for (const spec of infraResources) {
+        const rancherType = KIND_TO_RANCHER_TYPE[spec.kind] || spec.kind.toLowerCase();
+        const ns = spec.metadata.namespace || CEOL_NAMESPACE;
+        const link = `/c/${ CLUSTER_ID }/explorer/${ rancherType }/${ ns }/${ spec.metadata.name }`;
+
+        let live = null;
+
+        try {
+          live = await this.k8sRequest('GET', `${ collectionPath(spec) }/${ spec.metadata.name }`);
+        } catch {
+          // Resource doesn't exist yet
+        }
+
+        const { state, stateClass } = deriveState(spec, live);
+
+        results.push({
+          kind: spec.kind,
+          name: spec.metadata.name,
+          state,
+          stateClass,
+          link,
+        });
+      }
+
+      this.resources = results;
     },
 
     async createInfrastructure() {
@@ -61,6 +142,7 @@ export default defineComponent({
           await this.createResource(spec);
         }
 
+        await this.refreshResources();
         this.statusText = 'Infrastructure created successfully.';
       } catch (err: any) {
         this.statusText = `Error: ${ err.message || err }`;
@@ -122,22 +204,22 @@ export default defineComponent({
       }
     },
 
-    isStorage(resource: { kind: string }) {
-      return resource.kind === 'PersistentVolumeClaim';
+    isStateful(resource: { kind: string; metadata: { name: string } }) {
+      return resource.kind === 'Deployment' && resource.metadata.name === 'gitea';
     },
 
     async deleteExistingResources() {
       for (const kind of MANAGED_KINDS) {
-        if (this.isStorage(kind) && !this.deleteStorageToo) {
-          continue;
-        }
-
         try {
           const path = collectionPath(kind);
           const resp = await this.k8sRequest('GET', path);
           const items = resp?.items || [];
 
           for (const item of items) {
+            if (!this.deleteStorageToo && this.isStateful({ kind: kind.kind, metadata: item.metadata })) {
+              continue;
+            }
+
             const deletePath = `${ path }/${ item.metadata.name }`;
 
             await this.k8sRequest('DELETE', deletePath);
@@ -159,8 +241,7 @@ export default defineComponent({
     },
 
     async createResource(spec: InfraResource) {
-      // Skip storage creation if it already exists and we're preserving storage
-      if (this.isStorage(spec) && !this.deleteStorageToo && await this.resourceExists(spec)) {
+      if (!this.deleteStorageToo && this.isStateful(spec) && await this.resourceExists(spec)) {
         return;
       }
 
@@ -176,14 +257,14 @@ export default defineComponent({
   <div>
     <CeolTabs />
     <div class="ceol-page">
-      <label class="mt-20">
-      <input
-        v-model="deleteStorageToo"
-        type="checkbox"
-        :disabled="busy"
-      />
-      Delete storage too
-    </label>
+    <label class="mt-20">
+        <input
+          v-model="deleteStorageToo"
+          type="checkbox"
+          :disabled="busy"
+        />
+        Delete storage too
+      </label>
 
     <button
       class="btn role-primary mt-10"
@@ -203,6 +284,35 @@ export default defineComponent({
     >
       {{ statusText }}
     </p>
+
+    <table
+      v-if="resources.length"
+      class="sortable-table mt-20"
+    >
+      <thead>
+        <tr>
+          <th>Kind</th>
+          <th>Name</th>
+          <th>State</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="r in resources"
+          :key="`${ r.kind }/${ r.name }`"
+        >
+          <td>{{ r.kind }}</td>
+          <td>
+            <router-link :to="r.link">
+              {{ r.name }}
+            </router-link>
+          </td>
+          <td :class="r.stateClass">
+            {{ r.state }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
     </div>
   </div>
 </template>
@@ -210,5 +320,32 @@ export default defineComponent({
 <style lang="scss" scoped>
 .ceol-page {
   padding: 20px;
+}
+
+.sortable-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--text-secondary, #888);
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  td a {
+    color: var(--primary);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 </style>

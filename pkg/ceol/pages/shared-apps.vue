@@ -11,7 +11,9 @@ export default defineComponent({
   <div>
     <CeolTabs />
     <div class="ceol-page">
-      <h2>Shared Apps</h2>
+      <p class="text-muted">
+        No shared apps yet.
+      </p>
     </div>
   </div>
 </template>
