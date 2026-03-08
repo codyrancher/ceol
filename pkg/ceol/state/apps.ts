@@ -7,6 +7,7 @@ export interface App {
   id: string;
   name: string;
   logo: string;
+  icon: string;
   repoName: string;
   description: string;
   createdAt: string;
@@ -27,11 +28,12 @@ function templateLogo(templateId: string): string {
   return `data:image/svg+xml,${ encodeURIComponent(svg) }`;
 }
 
-function repoToApp(repo: GiteaRepo, templateId: string, createdBy: string, prodDeployed: boolean): App {
+function repoToApp(repo: GiteaRepo, templateId: string, createdBy: string, prodDeployed: boolean, icon: string): App {
   return {
     id:          repo.name,
     name:        repo.name,
     logo:        templateLogo(templateId),
+    icon,
     repoName:    repo.name,
     description: repo.description,
     createdAt:   repo.created_at,
@@ -49,13 +51,13 @@ export async function fetchApps(store: any): Promise<App[]> {
     const buildEnv = await getBuildStatus(store, repo.name);
     const prodDeployed = buildEnv.prod.state === 'success';
 
-    return repoToApp(repo, meta.templateId, meta.createdBy, prodDeployed);
+    return repoToApp(repo, meta.templateId, meta.createdBy, prodDeployed, meta.icon);
   }));
 
   return apps;
 }
 
-export async function createApp(store: any, name: string, templateId: string): Promise<App> {
+export async function createApp(store: any, name: string, templateId: string, icon: string): Promise<App> {
   const template = getTemplate(templateId);
 
   if (!template) {
@@ -67,7 +69,7 @@ export async function createApp(store: any, name: string, templateId: string): P
   const safeName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
   // Persist template ID so deploy can provision template-specific infra
-  await saveAppMeta(store, safeName, templateId);
+  await saveAppMeta(store, safeName, templateId, icon);
 
   const v3User = store.getters['auth/v3User'];
   const createdBy = v3User?.username || v3User?.name || 'unknown';
@@ -76,6 +78,7 @@ export async function createApp(store: any, name: string, templateId: string): P
     id:           safeName,
     name:         safeName,
     logo:         templateLogo(templateId),
+    icon,
     repoName:     safeName,
     description:  `Ceol app: ${ safeName }`,
     createdAt:    new Date().toISOString(),

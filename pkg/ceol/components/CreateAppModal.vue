@@ -7,6 +7,14 @@ import type { AppTemplate } from '../app-templates';
 
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 
+const APP_ICONS = [
+  'application', 'globe', 'code', 'terminal', 'dashboard',
+  'helm', 'docker', 'git', 'flask', 'compass',
+  'folder', 'storage', 'pipeline', 'marketplace', 'extension',
+  'monitoring', 'backup', 'lock', 'star', 'home',
+  'archive', 'send', 'explore', 'apps', 'service',
+];
+
 export default defineComponent({
   components: { AppModal },
 
@@ -23,6 +31,11 @@ export default defineComponent({
     return {
       appName:            '',
       selectedTemplateId: templates[0]?.id || '',
+      selectedIcon:       'application',
+      iconSearch:         '',
+      iconDropdownOpen:   false,
+      dropdownStyle:      {} as Record<string, string>,
+      appIcons:           APP_ICONS,
       templates,
       creating:           false,
       error:              '',
@@ -30,6 +43,16 @@ export default defineComponent({
   },
 
   computed: {
+    filteredIcons(): string[] {
+      const q = this.iconSearch.toLowerCase().trim();
+
+      if (!q) {
+        return this.appIcons;
+      }
+
+      return this.appIcons.filter((ic: string) => ic.includes(q));
+    },
+
     safeName(): string {
       return this.appName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '');
     },
@@ -74,6 +97,51 @@ export default defineComponent({
   },
 
   methods: {
+    selectIcon(ic: string) {
+      this.selectedIcon = ic;
+      this.iconDropdownOpen = false;
+      this.iconSearch = '';
+    },
+
+    toggleIconDropdown() {
+      this.iconDropdownOpen = !this.iconDropdownOpen;
+
+      if (this.iconDropdownOpen) {
+        this.iconSearch = '';
+
+        this.$nextTick(() => {
+          const trigger = (this.$refs.iconSelect as HTMLElement)?.querySelector('.icon-select__trigger');
+
+          if (trigger) {
+            const rect = trigger.getBoundingClientRect();
+
+            this.dropdownStyle = {
+              position: 'fixed',
+              top:      `${ rect.bottom + 4 }px`,
+              left:     `${ rect.left }px`,
+              width:    `${ rect.width }px`,
+              zIndex:   '10000',
+            };
+          }
+
+          (this.$refs.iconSearchInput as HTMLInputElement)?.focus();
+        });
+      }
+    },
+
+    onIconBlur(e: FocusEvent) {
+      const dropdown = this.$refs.iconDropdown as HTMLElement | undefined;
+      const container = this.$refs.iconSelect as HTMLElement | undefined;
+      const related = e.relatedTarget as Node | null;
+
+      if (related && (dropdown?.contains(related) || container?.contains(related))) {
+        return;
+      }
+
+      this.iconDropdownOpen = false;
+      this.iconSearch = '';
+    },
+
     async onSubmit() {
       if (!this.canCreate) {
         return;
@@ -83,7 +151,7 @@ export default defineComponent({
       this.error = '';
 
       try {
-        await createApp(this.$store, this.safeName, this.selectedTemplateId);
+        await createApp(this.$store, this.safeName, this.selectedTemplateId, this.selectedIcon);
         this.$emit('created');
       } catch (err: any) {
         const msg = err?.data || err?.message || err?.statusText || JSON.stringify(err);
@@ -159,6 +227,70 @@ export default defineComponent({
         >
           {{ nameError }}
         </p>
+      </div>
+
+      <div class="create-app-modal__section">
+        <label class="create-app-modal__label">Icon</label>
+        <div
+          ref="iconSelect"
+          class="icon-select"
+          @focusout="onIconBlur"
+        >
+          <button
+            type="button"
+            class="icon-select__trigger"
+            @click="toggleIconDropdown"
+          >
+            <i
+              class="icon"
+              :class="`icon-${ selectedIcon }`"
+            />
+            <span>{{ selectedIcon }}</span>
+            <i
+              class="icon icon-chevron-down icon-select__arrow"
+              :class="{ 'icon-select__arrow--open': iconDropdownOpen }"
+            />
+          </button>
+          <Teleport to="body">
+            <div
+              v-if="iconDropdownOpen"
+              ref="iconDropdown"
+              class="icon-select__dropdown"
+              :style="dropdownStyle"
+            >
+              <input
+                ref="iconSearchInput"
+                v-model="iconSearch"
+                type="text"
+                class="icon-select__search"
+                placeholder="Search icons..."
+                @focusout="onIconBlur"
+              >
+              <div class="icon-select__list">
+                <button
+                  v-for="ic in filteredIcons"
+                  :key="ic"
+                  type="button"
+                  class="icon-select__option"
+                  :class="{ 'icon-select__option--selected': selectedIcon === ic }"
+                  @mousedown.prevent="selectIcon(ic)"
+                >
+                  <i
+                    class="icon"
+                    :class="`icon-${ ic }`"
+                  />
+                  <span>{{ ic }}</span>
+                </button>
+                <div
+                  v-if="!filteredIcons.length"
+                  class="icon-select__empty"
+                >
+                  No icons match "{{ iconSearch }}"
+                </div>
+              </div>
+            </div>
+          </Teleport>
+        </div>
       </div>
 
       <p
@@ -249,6 +381,48 @@ export default defineComponent({
   }
 }
 
+.icon-select {
+  position: relative;
+
+  &__trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    background: var(--input-bg);
+    color: var(--input-text);
+    font-size: 14px;
+    cursor: pointer;
+    text-align: left;
+
+    &:hover {
+      border-color: var(--primary);
+    }
+
+    .icon:first-child {
+      font-size: 18px;
+    }
+
+    span {
+      flex: 1;
+    }
+  }
+
+  &__arrow {
+    font-size: 12px;
+    color: var(--text-secondary, #888);
+    transition: transform 0.15s;
+
+    &--open {
+      transform: rotate(180deg);
+    }
+  }
+
+}
+
 .template-grid {
   display: flex;
   flex-direction: column;
@@ -299,5 +473,72 @@ export default defineComponent({
     overflow: hidden;
     text-overflow: ellipsis;
   }
+}
+</style>
+
+<style lang="scss">
+.icon-select__dropdown {
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius);
+  background: var(--body-bg, #fff);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.icon-select__search {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--input-text);
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: var(--input-placeholder, #999);
+  }
+}
+
+.icon-select__list {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.icon-select__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--body-text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+
+  .icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+  }
+
+  &:hover {
+    background: var(--body-bg);
+  }
+
+  &--selected {
+    color: var(--primary);
+    font-weight: 600;
+  }
+}
+
+.icon-select__empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+  text-align: center;
 }
 </style>

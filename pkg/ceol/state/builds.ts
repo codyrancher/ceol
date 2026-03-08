@@ -42,13 +42,14 @@ async function k8sRequest(store: any, method: string, path: string, body?: any, 
 export interface AppMeta {
   templateId: string;
   createdBy:  string;
+  icon:       string;
 }
 
-export async function saveAppMeta(store: any, appName: string, templateId: string): Promise<void> {
+export async function saveAppMeta(store: any, appName: string, templateId: string, icon: string): Promise<void> {
   const cmName = configMapName(appName);
   const v3User = store.getters['auth/v3User'];
   const createdBy = v3User?.username || v3User?.name || 'unknown';
-  const data = { templateId, createdBy };
+  const data = { templateId, createdBy, icon };
 
   try {
     await k8sRequest(store, 'GET', `api/v1/namespaces/${ CEOL_NAMESPACE }/configmaps/${ cmName }`);
@@ -72,9 +73,10 @@ export async function getAppMeta(store: any, appName: string): Promise<AppMeta> 
     return {
       templateId: cm.data?.templateId || 'vue3',
       createdBy:  cm.data?.createdBy || 'unknown',
+      icon:       cm.data?.icon || 'application',
     };
   } catch {
-    return { templateId: 'vue3', createdBy: 'unknown' };
+    return { templateId: 'vue3', createdBy: 'unknown', icon: 'application' };
   }
 }
 

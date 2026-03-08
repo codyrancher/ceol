@@ -150,7 +150,7 @@ export default defineComponent({
 
     onTogglePin(app: App, e: Event) {
       e.stopPropagation();
-      togglePin(this.$store, app.name);
+      togglePin(this.$store, app.name, app.icon);
       this.pinnedNames = getPinnedApps(this.$store);
       syncPinnedProducts(this.$store);
     },
@@ -325,11 +325,12 @@ export default defineComponent({
               @click="openProd(app)"
               @keydown.enter="openProd(app)"
             >
-              <img
-                class="ceol-app-card__logo"
-                :src="app.logo"
-                :alt="app.name"
-              >
+              <div class="ceol-app-card__icon">
+                <i
+                  class="icon"
+                  :class="`icon-${ app.icon }`"
+                />
+              </div>
               <div class="ceol-app-card__info">
                 <span class="ceol-app-card__name">
                   {{ app.name }}
@@ -584,11 +585,17 @@ export default defineComponent({
     background: var(--body-bg);
   }
 
-  &__logo {
+  &__icon {
     width: 48px;
     height: 48px;
     border-radius: 8px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent-bg, rgba(0, 120, 215, 0.06));
+    font-size: 24px;
+    color: var(--primary);
   }
 
   &--draft {
