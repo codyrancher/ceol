@@ -3,16 +3,16 @@ import { generateFiles } from './files';
 import { ensureGiteaAdmin, createRepo, deleteRepo, pushFiles } from '../gitea';
 import { k8sRequest } from '../../state/k8s';
 
-async function ensurePostgres(store: any, appName: string, ns: string): Promise<void> {
+async function ensurePostgres(store: any, appName: string, ns: string, env: string): Promise<void> {
   const safeName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-  const pgName = `${ safeName }-postgres`;
+  const pgName = `${ safeName }-postgres-${ env }`;
 
   const deployment = {
     apiVersion: 'apps/v1',
     kind:       'Deployment',
     metadata:   {
       name: pgName, namespace: ns,
-      labels: { app: pgName, 'ceol/app': appName, 'ceol/managed': 'true' },
+      labels: { app: pgName, 'ceol/app': appName, 'ceol/env': env, 'ceol/managed': 'true' },
     },
     spec: {
       replicas: 1,
@@ -37,7 +37,7 @@ async function ensurePostgres(store: any, appName: string, ns: string): Promise<
             },
           ],
           volumes: [
-            { name: 'data', hostPath: { path: `/var/lib/ceol/pg/${ safeName }`, type: 'DirectoryOrCreate' } },
+            { name: 'data', hostPath: { path: `/var/lib/ceol/pg/${ safeName }-${ env }`, type: 'DirectoryOrCreate' } },
           ],
         },
       },
@@ -55,7 +55,7 @@ async function ensurePostgres(store: any, appName: string, ns: string): Promise<
     kind:       'Service',
     metadata:   {
       name: pgName, namespace: ns,
-      labels: { app: pgName, 'ceol/app': appName, 'ceol/managed': 'true' },
+      labels: { app: pgName, 'ceol/app': appName, 'ceol/env': env, 'ceol/managed': 'true' },
     },
     spec: {
       selector: { app: pgName },
@@ -107,14 +107,14 @@ export const vue3ExpressPgTemplate: AppTemplate = {
     await pushFiles(store, owner, safeName, generateFiles(appName));
   },
 
-  async deploy(store, appName, ns): Promise<DeployResult> {
+  async deploy(store, appName, ns, env): Promise<DeployResult> {
     const safeName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
-    await ensurePostgres(store, appName, ns);
+    await ensurePostgres(store, appName, ns, env);
 
     return {
       env: [
-        { name: 'PGHOST', value: `${ safeName }-postgres.${ ns }.svc` },
+        { name: 'PGHOST', value: `${ safeName }-postgres-${ env }.${ ns }.svc` },
         { name: 'PGPORT', value: '5432' },
         { name: 'PGUSER', value: 'app' },
         { name: 'PGPASSWORD', value: 'app' },

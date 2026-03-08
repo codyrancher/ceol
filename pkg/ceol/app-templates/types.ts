@@ -15,5 +15,5 @@ export interface AppTemplate {
   files:       (appName: string) => TemplateFile[];
   init:        (store: any, appName: string) => Promise<void>;
   destroy?:    (store: any, appName: string) => Promise<void>;
-  deploy?:     (store: any, appName: string, namespace: string) => Promise<DeployResult>;
+  deploy?:     (store: any, appName: string, namespace: string, env: string) => Promise<DeployResult>;
 }

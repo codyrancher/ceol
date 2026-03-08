@@ -349,7 +349,7 @@ async function ensureDeployment(store: any, appName: string, env: string, imageT
 
   // Provision template-specific infrastructure
   if (template?.deploy) {
-    const result = await template.deploy(store, appName, ns);
+    const result = await template.deploy(store, appName, ns, env);
 
     if (result.env) {
       extraEnv = result.env;
