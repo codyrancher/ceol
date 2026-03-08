@@ -26,21 +26,18 @@ export function getUsername(store: any): string {
     return resolvedUsername;
   }
 
-  // External auth provider — principalId is like "local://user-s6tpt"
   const principalId: string = store.getters['auth/principalId'] || '';
 
   if (principalId) {
-    const userId = principalId.split('://')[1] || '';
-
-    if (userId) {
-      // Kick off async resolution (non-blocking)
-      if (!resolvePromise) {
-        resolvePromise = resolveUsernameFromApi(store, userId);
-      }
-
-      // Return userId as temporary fallback
-      return resolvedUsername || userId;
+    // Kick off async resolution (non-blocking)
+    if (!resolvePromise) {
+      resolvePromise = resolveFromPrincipal(store, principalId);
     }
+
+    // Return short fallback while resolving
+    const fallback = principalId.split('://')[1] || principalId;
+
+    return resolvedUsername || fallback;
   }
 
   return '';
@@ -72,35 +69,60 @@ export async function resolveUsername(store: any): Promise<string> {
   const principalId: string = store.getters['auth/principalId'] || '';
 
   if (principalId) {
-    const userId = principalId.split('://')[1] || '';
-
-    if (userId) {
-      if (!resolvePromise) {
-        resolvePromise = resolveUsernameFromApi(store, userId);
-      }
-
-      return await resolvePromise;
+    if (!resolvePromise) {
+      resolvePromise = resolveFromPrincipal(store, principalId);
     }
+
+    return await resolvePromise;
   }
 
   return '';
 }
 
-async function resolveUsernameFromApi(store: any, userId: string): Promise<string> {
+/**
+ * Look up the principal to get the login/display name, then fall back to
+ * the user record if the principal is local.
+ */
+async function resolveFromPrincipal(store: any, principalId: string): Promise<string> {
+  const fallback = principalId.split('://')[1] || principalId;
+
+  // Try the principal endpoint first — works for all auth providers
   try {
     const resp = await store.dispatch('management/request', {
-      opt: { url: `/v3/users/${ userId }`, method: 'GET' },
+      opt: { url: `/v3/principals/${ encodeURIComponent(principalId) }`, method: 'GET' },
     });
 
-    const name = resp?.username || resp?.name || userId;
+    const name = resp?.loginName || resp?.name || resp?.displayName;
 
-    resolvedUsername = name;
+    if (name) {
+      resolvedUsername = name;
 
-    return name;
+      return name;
+    }
   } catch {
-    // API call failed — fall back to userId
-    resolvedUsername = userId;
-
-    return userId;
+    // Principal lookup failed, try user lookup below
   }
+
+  // For local principals (local://user-xxxxx), try the users API
+  if (principalId.startsWith('local://')) {
+    try {
+      const resp = await store.dispatch('management/request', {
+        opt: { url: `/v3/users/${ fallback }`, method: 'GET' },
+      });
+
+      const name = resp?.username || resp?.name;
+
+      if (name) {
+        resolvedUsername = name;
+
+        return name;
+      }
+    } catch {
+      // User lookup also failed
+    }
+  }
+
+  resolvedUsername = fallback;
+
+  return fallback;
 }
