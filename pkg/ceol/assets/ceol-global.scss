@@ -1,0 +1,8 @@
+// Global styles for ceol extension pages (plain layout overrides)
+.indented-panel:has(.ceol-apps-page),
+.indented-panel:has(.ceol-page),
+.indented-panel:has(.ceol-settings) {
+  margin-left: 20px;
+  margin-right: 20px;
+  width: initial;
+}

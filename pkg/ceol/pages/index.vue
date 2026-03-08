@@ -450,7 +450,7 @@ export default defineComponent({
 }
 
 .ceol-sidebar {
-  width: 200px;
+  width: 240px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   padding-right: 10px;
@@ -663,12 +663,5 @@ export default defineComponent({
       color: var(--primary);
     }
   }
-}
-</style>
-
-<style lang="scss">
-.indented-panel:has(.ceol-apps-page) {
-  width: 100%;
-  margin-left: 0;
 }
 </style>

@@ -1,5 +1,6 @@
 import { importTypes } from '@rancher/auto-import';
 import { IPlugin } from '@shell/core/types';
+import './assets/ceol-global.scss';
 
 // Init the package
 export default function(plugin: IPlugin): void {
