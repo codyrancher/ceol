@@ -1,4 +1,5 @@
 import { BLANK_CLUSTER } from '@shell/store/store-types.js';
+import { getUsername } from './auth';
 
 const STORAGE_KEY = 'ceol-pinned-apps';
 const PIN_PRODUCT_PREFIX = 'ceol-pin-';
@@ -6,12 +7,6 @@ const PIN_PRODUCT_PREFIX = 'ceol-pin-';
 interface PinnedApp {
   name: string;
   icon: string;
-}
-
-function getUsername(store: any): string {
-  const v3User = store.getters['auth/v3User'];
-
-  return v3User?.username || v3User?.name || '';
 }
 
 function userKey(store: any): string {

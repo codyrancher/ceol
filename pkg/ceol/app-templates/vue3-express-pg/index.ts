@@ -1,6 +1,74 @@
-import type { AppTemplate } from '../types';
+import type { AppTemplate, DeployResult } from '../types';
 import { generateFiles } from './files';
 import { ensureGiteaAdmin, createRepo, deleteRepo, pushFiles } from '../gitea';
+import { k8sRequest } from '../../state/k8s';
+
+async function ensurePostgres(store: any, appName: string, ns: string): Promise<void> {
+  const safeName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  const pgName = `${ safeName }-postgres`;
+
+  const deployment = {
+    apiVersion: 'apps/v1',
+    kind:       'Deployment',
+    metadata:   {
+      name: pgName, namespace: ns,
+      labels: { app: pgName, 'ceol/app': appName, 'ceol/managed': 'true' },
+    },
+    spec: {
+      replicas: 1,
+      strategy: { type: 'Recreate' },
+      selector: { matchLabels: { app: pgName } },
+      template: {
+        metadata: { labels: { app: pgName } },
+        spec:     {
+          containers: [
+            {
+              name:  'postgres',
+              image: 'postgres:16-alpine',
+              ports: [{ containerPort: 5432, name: 'pg' }],
+              env:   [
+                { name: 'POSTGRES_DB', value: safeName },
+                { name: 'POSTGRES_USER', value: 'app' },
+                { name: 'POSTGRES_PASSWORD', value: 'app' },
+              ],
+              volumeMounts: [
+                { name: 'data', mountPath: '/var/lib/postgresql/data', subPath: 'pgdata' },
+              ],
+            },
+          ],
+          volumes: [
+            { name: 'data', hostPath: { path: `/var/lib/ceol/pg/${ safeName }`, type: 'DirectoryOrCreate' } },
+          ],
+        },
+      },
+    },
+  };
+
+  try {
+    await k8sRequest(store, 'GET', `apis/apps/v1/namespaces/${ ns }/deployments/${ pgName }`);
+  } catch {
+    await k8sRequest(store, 'POST', `apis/apps/v1/namespaces/${ ns }/deployments`, deployment);
+  }
+
+  const service = {
+    apiVersion: 'v1',
+    kind:       'Service',
+    metadata:   {
+      name: pgName, namespace: ns,
+      labels: { app: pgName, 'ceol/app': appName, 'ceol/managed': 'true' },
+    },
+    spec: {
+      selector: { app: pgName },
+      ports:    [{ name: 'pg', port: 5432, targetPort: 5432 }],
+    },
+  };
+
+  try {
+    await k8sRequest(store, 'GET', `api/v1/namespaces/${ ns }/services/${ pgName }`);
+  } catch {
+    await k8sRequest(store, 'POST', `api/v1/namespaces/${ ns }/services`, service);
+  }
+}
 
 function generateLogo(): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -37,6 +105,22 @@ export const vue3ExpressPgTemplate: AppTemplate = {
 
     await createRepo(store, safeName);
     await pushFiles(store, owner, safeName, generateFiles(appName));
+  },
+
+  async deploy(store, appName, ns): Promise<DeployResult> {
+    const safeName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+    await ensurePostgres(store, appName, ns);
+
+    return {
+      env: [
+        { name: 'PGHOST', value: `${ safeName }-postgres.${ ns }.svc` },
+        { name: 'PGPORT', value: '5432' },
+        { name: 'PGUSER', value: 'app' },
+        { name: 'PGPASSWORD', value: 'app' },
+        { name: 'PGDATABASE', value: safeName },
+      ],
+    };
   },
 
   async destroy(store, appName) {

@@ -5,7 +5,7 @@ import { syncPinnedProducts } from './state/pins';
 export function init($plugin: IPlugin, store: any) {
   const { product, virtualType, basicType } = $plugin.DSL(store, 'ceol');
 
-  product({
+  (product as any)({
     svg:                 require('./assets/ceol-icon.svg'),
     inStore:             'management',
     removable:           false,
@@ -17,7 +17,7 @@ export function init($plugin: IPlugin, store: any) {
     },
   });
 
-  virtualType({
+  (virtualType as any)({
     label: 'Apps',
     icon: 'folder',
     namespaced: false,
@@ -30,7 +30,7 @@ export function init($plugin: IPlugin, store: any) {
     exact: true,
   });
 
-  virtualType({
+  (virtualType as any)({
     label: 'Settings',
     icon: 'gear',
     namespaced: false,

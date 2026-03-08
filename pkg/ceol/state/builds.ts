@@ -1,9 +1,11 @@
 import { CEOL_NAMESPACE, GITEA_NODE_PORT } from '../infra';
 import { ensureGiteaAdmin, getGiteaToken } from '../app-templates/gitea';
+import { getTemplate } from '../app-templates';
 import { MANAGEMENT } from '@shell/config/types';
+import { k8sRequest, CLUSTER_ID, K8S_BASE } from './k8s';
+import { resolveUsername } from './auth';
 
-const CLUSTER_ID = 'local';
-const K8S_BASE = `/k8s/clusters/${ CLUSTER_ID }`;
+export { k8sRequest } from './k8s';
 
 export function appNamespace(appName: string): string {
   return `ceol-app-${ appName }`;
@@ -25,20 +27,6 @@ function configMapName(appName: string): string {
   return `ceol-build-${ appName }`;
 }
 
-async function k8sRequest(store: any, method: string, path: string, body?: any, contentType?: string): Promise<any> {
-  const opt: any = {
-    url:     `${ K8S_BASE }/${ path }`,
-    method,
-    headers: { 'content-type': contentType || 'application/json', accept: 'application/json' },
-  };
-
-  if (body) {
-    opt.data = body;
-  }
-
-  return await store.dispatch('management/request', { opt });
-}
-
 export interface AppMeta {
   templateId: string;
   createdBy:  string;
@@ -47,8 +35,7 @@ export interface AppMeta {
 
 export async function saveAppMeta(store: any, appName: string, templateId: string, icon: string): Promise<void> {
   const cmName = configMapName(appName);
-  const v3User = store.getters['auth/v3User'];
-  const createdBy = v3User?.username || v3User?.name || 'unknown';
+  const createdBy = await resolveUsername(store) || 'unknown';
   const data = { templateId, createdBy, icon };
 
   try {
@@ -350,73 +337,6 @@ export function appProxyUrl(appName: string, env: string): string {
   return `${ K8S_BASE }/api/v1/namespaces/${ ns }/services/http:${ svc }:80/proxy/`;
 }
 
-async function ensurePostgres(store: any, appName: string, ns: string): Promise<void> {
-  const safeName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-  const pgName = `${ safeName }-postgres`;
-
-  const deployment = {
-    apiVersion: 'apps/v1',
-    kind:       'Deployment',
-    metadata:   {
-      name: pgName, namespace: ns,
-      labels: { app: pgName, 'ceol/app': appName, 'ceol/managed': 'true' },
-    },
-    spec: {
-      replicas: 1,
-      strategy: { type: 'Recreate' },
-      selector: { matchLabels: { app: pgName } },
-      template: {
-        metadata: { labels: { app: pgName } },
-        spec:     {
-          containers: [
-            {
-              name:  'postgres',
-              image: 'postgres:16-alpine',
-              ports: [{ containerPort: 5432, name: 'pg' }],
-              env:   [
-                { name: 'POSTGRES_DB', value: safeName },
-                { name: 'POSTGRES_USER', value: 'app' },
-                { name: 'POSTGRES_PASSWORD', value: 'app' },
-              ],
-              volumeMounts: [
-                { name: 'data', mountPath: '/var/lib/postgresql/data', subPath: 'pgdata' },
-              ],
-            },
-          ],
-          volumes: [
-            { name: 'data', hostPath: { path: `/var/lib/ceol/pg/${ safeName }`, type: 'DirectoryOrCreate' } },
-          ],
-        },
-      },
-    },
-  };
-
-  try {
-    await k8sRequest(store, 'GET', `apis/apps/v1/namespaces/${ ns }/deployments/${ pgName }`);
-  } catch {
-    await k8sRequest(store, 'POST', `apis/apps/v1/namespaces/${ ns }/deployments`, deployment);
-  }
-
-  const service = {
-    apiVersion: 'v1',
-    kind:       'Service',
-    metadata:   {
-      name: pgName, namespace: ns,
-      labels: { app: pgName, 'ceol/app': appName, 'ceol/managed': 'true' },
-    },
-    spec: {
-      selector: { app: pgName },
-      ports:    [{ name: 'pg', port: 5432, targetPort: 5432 }],
-    },
-  };
-
-  try {
-    await k8sRequest(store, 'GET', `api/v1/namespaces/${ ns }/services/${ pgName }`);
-  } catch {
-    await k8sRequest(store, 'POST', `api/v1/namespaces/${ ns }/services`, service);
-  }
-}
-
 async function ensureDeployment(store: any, appName: string, env: string, imageTag: string): Promise<void> {
   const ns = appNamespace(appName);
 
@@ -424,21 +344,16 @@ async function ensureDeployment(store: any, appName: string, env: string, imageT
   await ensurePullSecret(store, appName);
 
   const meta = await getAppMeta(store, appName);
-  const templateId = meta.templateId;
-  const extraEnv: Array<{ name: string; value: string }> = [];
+  const template = getTemplate(meta.templateId);
+  let extraEnv: Array<{ name: string; value: string }> = [];
 
   // Provision template-specific infrastructure
-  if (templateId === 'vue3-express-pg') {
-    const safeName = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  if (template?.deploy) {
+    const result = await template.deploy(store, appName, ns);
 
-    await ensurePostgres(store, appName, ns);
-    extraEnv.push(
-      { name: 'PGHOST', value: `${ safeName }-postgres.${ ns }.svc` },
-      { name: 'PGPORT', value: '5432' },
-      { name: 'PGUSER', value: 'app' },
-      { name: 'PGPASSWORD', value: 'app' },
-      { name: 'PGDATABASE', value: safeName },
-    );
+    if (result.env) {
+      extraEnv = result.env;
+    }
   }
 
   const name = deploymentName(appName, env);

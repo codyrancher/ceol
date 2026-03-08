@@ -277,12 +277,17 @@ export default defineComponent({
       }
 
       this.buildPolling = setInterval(async() => {
-        if (this.buildEnv.staging.state === 'building') {
-          this.buildEnv.staging = await pollBuildStatus(this.$store, this.repoName);
-        }
+        try {
+          if (this.buildEnv.staging.state === 'building') {
+            this.buildEnv.staging = await pollBuildStatus(this.$store, this.repoName);
+          }
 
-        if (this.buildEnv.prod.state === 'building') {
-          this.buildEnv.prod = await pollPromoteStatus(this.$store, this.repoName);
+          if (this.buildEnv.prod.state === 'building') {
+            this.buildEnv.prod = await pollPromoteStatus(this.$store, this.repoName);
+          }
+        } catch (err: any) {
+          console.error('Poll error:', err);
+          this.error = err?.message || String(err);
         }
 
         if (this.buildEnv.staging.state !== 'building' && this.buildEnv.prod.state !== 'building') {

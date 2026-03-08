@@ -2,6 +2,8 @@ import { getTemplate } from '../app-templates';
 import { listRepos, deleteRepo, ensureGiteaAdmin } from '../app-templates/gitea';
 import type { GiteaRepo } from '../app-templates/gitea';
 import { saveAppMeta, getAppMeta, getBuildStatus } from './builds';
+import { isPinned, togglePin, syncPinnedProducts } from './pins';
+import { resolveUsername } from './auth';
 
 export interface App {
   id: string;
@@ -71,8 +73,7 @@ export async function createApp(store: any, name: string, templateId: string, ic
   // Persist template ID so deploy can provision template-specific infra
   await saveAppMeta(store, safeName, templateId, icon);
 
-  const v3User = store.getters['auth/v3User'];
-  const createdBy = v3User?.username || v3User?.name || 'unknown';
+  const createdBy = await resolveUsername(store) || 'unknown';
 
   return {
     id:           safeName,
@@ -92,4 +93,25 @@ export async function deleteApp(store: any, repoName: string): Promise<void> {
   const owner = await ensureGiteaAdmin(store);
 
   await deleteRepo(store, owner, repoName);
+
+  // Remove pin if pinned, and sync sidebar
+  if (isPinned(store, repoName)) {
+    togglePin(store, repoName);
+    syncPinnedProducts(store);
+  }
+}
+
+export async function deleteAllApps(store: any): Promise<void> {
+  const repos = await listRepos(store);
+  const owner = await ensureGiteaAdmin(store);
+
+  for (const repo of repos) {
+    await deleteRepo(store, owner, repo.name);
+
+    if (isPinned(store, repo.name)) {
+      togglePin(store, repo.name);
+    }
+  }
+
+  syncPinnedProducts(store);
 }

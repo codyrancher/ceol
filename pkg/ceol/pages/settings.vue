@@ -3,6 +3,8 @@ import { defineComponent } from 'vue';
 import { MANAGEMENT } from '@shell/config/types';
 import InfrastructurePage from './infrastructure.vue';
 import { CEOL_PROJECT_NAME } from '../infra';
+import { deleteAllApps } from '../state/apps';
+import { getUsername } from '../state/auth';
 
 const CLUSTER_ID = 'local';
 const K8S_BASE = `/k8s/clusters/${ CLUSTER_ID }`;
@@ -37,6 +39,7 @@ export default defineComponent({
       rbacStatus:   '',
       allUsers:     [] as RancherUser[],
       userSearch:   '',
+      deletingAll:  false,
     };
   },
 
@@ -54,9 +57,7 @@ export default defineComponent({
     },
 
     currentUser(): string {
-      const v3User = this.$store.getters['auth/v3User'];
-
-      return v3User?.username || v3User?.name || '';
+      return getUsername(this.$store);
     },
 
     filteredUsers(): Array<{ username: string; name: string; selected: boolean }> {
@@ -313,6 +314,23 @@ export default defineComponent({
         this.rbacSyncing = false;
       }
     },
+
+    async onDeleteAllApps() {
+      if (!confirm('Delete ALL apps and their repositories? This cannot be undone.')) {
+        return;
+      }
+
+      this.deletingAll = true;
+
+      try {
+        await deleteAllApps(this.$store);
+        this.rbacStatus = 'All apps deleted.';
+      } catch (err: any) {
+        this.rbacStatus = `Error: ${ err.message || err }`;
+      } finally {
+        this.deletingAll = false;
+      }
+    },
   },
 });
 </script>
@@ -459,6 +477,31 @@ export default defineComponent({
         <p class="ceol-settings__note mt-10">
           Saving updates the Rancher project membership for the Ceol project. If new users are added to Rancher after saving, click <b>Resync Membership</b> to update their access.
         </p>
+
+        <h3 class="ceol-settings__section-title ceol-settings__danger-title mt-20">
+          Danger Zone
+        </h3>
+        <div class="ceol-settings__danger">
+          <div class="ceol-settings__danger-row">
+            <div>
+              <b>Delete all apps</b>
+              <p class="ceol-settings__note">
+                Permanently delete all apps and their Gitea repositories.
+              </p>
+            </div>
+            <button
+              class="btn role-secondary ceol-settings__danger-btn"
+              :disabled="deletingAll"
+              @click="onDeleteAllApps"
+            >
+              <i
+                v-if="deletingAll"
+                class="icon icon-spinner icon-spin mr-5"
+              />
+              {{ deletingAll ? 'Deleting...' : 'Delete All Apps' }}
+            </button>
+          </div>
+        </div>
       </template>
     </div>
 
@@ -656,6 +699,34 @@ export default defineComponent({
   &__display {
     font-size: 12px;
     color: var(--text-secondary, #888);
+  }
+}
+
+.ceol-settings__danger-title {
+  color: var(--error);
+}
+
+.ceol-settings__danger {
+  border: 1px solid var(--error);
+  border-radius: var(--border-radius);
+  padding: 16px;
+}
+
+.ceol-settings__danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ceol-settings__danger-btn {
+  white-space: nowrap;
+  color: var(--error);
+  border-color: var(--error);
+
+  &:hover {
+    background: var(--error);
+    color: #fff;
   }
 }
 </style>

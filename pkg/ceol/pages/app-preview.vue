@@ -1,6 +1,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue';
 import { appProxyUrl } from '../state/builds';
+import { getUsername } from '../state/auth';
 
 export default defineComponent({
   data() {
@@ -12,9 +13,7 @@ export default defineComponent({
 
   computed: {
     username(): string {
-      const v3User = this.$store.getters['auth/v3User'];
-
-      return v3User?.username || v3User?.name || '';
+      return getUsername(this.$store);
     },
 
     proxyUrl(): string {

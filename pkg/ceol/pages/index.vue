@@ -4,6 +4,7 @@ import CreateAppModal from '../components/CreateAppModal.vue';
 import { fetchApps } from '../state/apps';
 import { togglePin, getPinnedApps, syncPinnedProducts } from '../state/pins';
 import { templates } from '../app-templates';
+import { getUsername } from '../state/auth';
 import type { App } from '../state/apps';
 
 export default defineComponent({
@@ -29,13 +30,15 @@ export default defineComponent({
     },
 
     currentUser(): string {
-      const v3User = this.$store.getters['auth/v3User'];
-
-      return v3User?.username || v3User?.name || '';
+      return getUsername(this.$store);
     },
 
-    /** Apps visible to this user: prod-deployed OR owned by current user */
+    /** Apps visible to this user: prod-deployed OR owned by current user. Show all if user unknown. */
     visibleApps(): App[] {
+      if (!this.currentUser) {
+        return this.apps;
+      }
+
       return this.apps.filter((a) => a.prodDeployed || a.createdBy === this.currentUser);
     },
 
