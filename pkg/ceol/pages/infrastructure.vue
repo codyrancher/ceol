@@ -6,8 +6,6 @@ import {
   collectionPath
 } from '../infra';
 import type { InfraResource } from '../infra';
-import CeolTabs from '../components/CeolTabs.vue';
-
 const CLUSTER_ID = 'local';
 const K8S_BASE = `/k8s/clusters/${ CLUSTER_ID }`;
 
@@ -50,8 +48,6 @@ function deriveState(resource: InfraResource, live: any): { state: string; state
 }
 
 export default defineComponent({
-  components: { CeolTabs },
-
   data() {
     return {
       busy:             false,
@@ -268,9 +264,7 @@ export default defineComponent({
 
 <template>
   <div>
-    <CeolTabs />
-    <div class="ceol-page">
-    <label class="mt-20">
+    <label>
         <input
           v-model="deleteStorageToo"
           type="checkbox"
@@ -326,15 +320,10 @@ export default defineComponent({
         </tr>
       </tbody>
     </table>
-    </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.ceol-page {
-  padding: 20px;
-}
-
 .sortable-table {
   width: 100%;
   border-collapse: collapse;

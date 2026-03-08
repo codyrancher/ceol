@@ -12,7 +12,7 @@ export default function(plugin: IPlugin): void {
   // Load a product
   plugin.addProduct(require('./product'));
 
-  // Add routes for ceol pages
+  // Add routes for ceol pages (default layout includes SideNav sidebar)
   plugin.addRoute('plain', {
     name:      'ceol',
     path:      '/c/:cluster/ceol',
@@ -28,9 +28,9 @@ export default function(plugin: IPlugin): void {
   });
 
   plugin.addRoute('plain', {
-    name:      'ceol-infrastructure',
-    path:      '/c/:cluster/ceol/infrastructure',
-    component: () => import('./pages/infrastructure.vue'),
+    name:      'ceol-settings',
+    path:      '/c/:cluster/ceol/settings',
+    component: () => import('./pages/settings.vue'),
     meta:      { product: 'ceol' },
   });
 

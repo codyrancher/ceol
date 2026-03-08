@@ -15,11 +15,19 @@ export default defineComponent({
         No shared apps yet.
       </p>
     </div>
+
   </div>
 </template>
 
 <style lang="scss" scoped>
 .ceol-page {
   padding: 20px;
+}
+</style>
+
+<style lang="scss">
+.indented-panel:has(.ceol-page) {
+  width: 100%;
+  margin-left: 0;
 }
 </style>

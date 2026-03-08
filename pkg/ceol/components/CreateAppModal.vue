@@ -2,6 +2,7 @@
 import { defineComponent } from 'vue';
 import AppModal from '@shell/components/AppModal.vue';
 import { templates } from '../app-templates';
+import { createApp } from '../state/apps';
 import type { AppTemplate } from '../app-templates';
 
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
@@ -16,13 +17,15 @@ export default defineComponent({
     },
   },
 
-  emits: ['close', 'create'],
+  emits: ['close', 'created'],
 
   data() {
     return {
       appName:            '',
       selectedTemplateId: templates[0]?.id || '',
       templates,
+      creating:           false,
+      error:              '',
     };
   },
 
@@ -60,7 +63,7 @@ export default defineComponent({
     },
 
     canCreate(): boolean {
-      return this.safeName.length >= 2 && !this.nameError && !!this.selectedTemplateId;
+      return this.safeName.length >= 2 && !this.nameError && !!this.selectedTemplateId && !this.creating;
     },
   },
 
@@ -71,12 +74,23 @@ export default defineComponent({
   },
 
   methods: {
-    onSubmit() {
+    async onSubmit() {
       if (!this.canCreate) {
         return;
       }
 
-      this.$emit('create', { name: this.safeName, templateId: this.selectedTemplateId });
+      this.creating = true;
+      this.error = '';
+
+      try {
+        await createApp(this.$store, this.safeName, this.selectedTemplateId);
+        this.$emit('created');
+      } catch (err: any) {
+        const msg = err?.data || err?.message || err?.statusText || JSON.stringify(err);
+
+        this.error = msg;
+        this.creating = false;
+      }
     },
   },
 });
@@ -147,9 +161,17 @@ export default defineComponent({
         </p>
       </div>
 
+      <p
+        v-if="error"
+        class="create-app-modal__error"
+      >
+        {{ error }}
+      </p>
+
       <div class="create-app-modal__actions">
         <button
           class="btn role-secondary"
+          :disabled="creating"
           @click="$emit('close')"
         >
           Cancel
@@ -159,7 +181,11 @@ export default defineComponent({
           :disabled="!canCreate"
           @click="onSubmit"
         >
-          Create
+          <i
+            v-if="creating"
+            class="icon icon-spinner icon-spin mr-5"
+          />
+          {{ creating ? 'Creating...' : 'Create' }}
         </button>
       </div>
     </div>

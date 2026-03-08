@@ -39,9 +39,16 @@ async function k8sRequest(store: any, method: string, path: string, body?: any, 
   return await store.dispatch('management/request', { opt });
 }
 
+export interface AppMeta {
+  templateId: string;
+  createdBy:  string;
+}
+
 export async function saveAppMeta(store: any, appName: string, templateId: string): Promise<void> {
   const cmName = configMapName(appName);
-  const data = { templateId };
+  const v3User = store.getters['auth/v3User'];
+  const createdBy = v3User?.username || v3User?.name || 'unknown';
+  const data = { templateId, createdBy };
 
   try {
     await k8sRequest(store, 'GET', `api/v1/namespaces/${ CEOL_NAMESPACE }/configmaps/${ cmName }`);
@@ -58,13 +65,16 @@ export async function saveAppMeta(store: any, appName: string, templateId: strin
   }
 }
 
-async function getAppTemplateId(store: any, appName: string): Promise<string> {
+export async function getAppMeta(store: any, appName: string): Promise<AppMeta> {
   try {
     const cm = await k8sRequest(store, 'GET', `api/v1/namespaces/${ CEOL_NAMESPACE }/configmaps/${ configMapName(appName) }`);
 
-    return cm.data?.templateId || 'vue3';
+    return {
+      templateId: cm.data?.templateId || 'vue3',
+      createdBy:  cm.data?.createdBy || 'unknown',
+    };
   } catch {
-    return 'vue3';
+    return { templateId: 'vue3', createdBy: 'unknown' };
   }
 }
 
@@ -411,7 +421,8 @@ async function ensureDeployment(store: any, appName: string, env: string, imageT
   await ensureAppProject(store, appName);
   await ensurePullSecret(store, appName);
 
-  const templateId = await getAppTemplateId(store, appName);
+  const meta = await getAppMeta(store, appName);
+  const templateId = meta.templateId;
   const extraEnv: Array<{ name: string; value: string }> = [];
 
   // Provision template-specific infrastructure

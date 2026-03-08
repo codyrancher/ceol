@@ -50,14 +50,6 @@ export default defineComponent({
   </div>
 </template>
 
-<style lang="scss">
-// Override IndentedPanel constraints for ceol pages
-.indented-panel:has(.ceol-tabs) {
-  width: 100%;
-  margin-left: 0;
-}
-</style>
-
 <style lang="scss" scoped>
 .ceol-tabs {
   display: flex;

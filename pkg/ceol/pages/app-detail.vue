@@ -870,6 +870,7 @@ export default defineComponent({
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -1266,5 +1267,12 @@ export default defineComponent({
       }
     }
   }
+}
+</style>
+
+<style lang="scss">
+.indented-panel:has(.ceol-page) {
+  width: 100%;
+  margin-left: 0;
 }
 </style>
